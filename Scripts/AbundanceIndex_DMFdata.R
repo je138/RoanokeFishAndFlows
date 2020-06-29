@@ -57,14 +57,14 @@ ggplot(a.shad, aes(x=spstatus, y = FL_mm)) +
 ## Grouping by control3 (haul id (1 haul of seine = 1 unit of effort), species, and species status)
 ## and creating summary column of average CPUE
 abundance.allgroups <- alosines.first.pulls %>% group_by(control3, date, Species_name, spstatus, location) %>%
-  select(control1, control3, month, colnum) %>%
+  dplyr::select(control1, control3, month, colnum) %>%
   summarise(cpue = mean(colnum))
 
 ## Filtering for only juvenile alewife (will make separate index for combined group)
 juv.alewife <- abundance.allgroups %>% filter(Species_name == "Alewife" &
                                            spstatus == "1")
 
-abundance.juv.alewife <- juv.alewife %>% select(1:6) %>% group_by(date, location) %>%
+abundance.juv.alewife <- juv.alewife %>% dplyr::select(1:6) %>% group_by(date, location) %>%
   summarise(juv.alewife.index = mean(cpue))
 
 # ggplot(data = juv.alewife.abundance, aes(y= juv.alewife.index, x = date)) +
@@ -73,35 +73,35 @@ abundance.juv.alewife <- juv.alewife %>% select(1:6) %>% group_by(date, location
 ## Repeating process for combined (juvenile and adult) group
 combined.alewife <- abundance.allgroups %>% filter(Species_name == "Alewife" &
                                                      spstatus == "0")
-abundance.combined.alewife <- combined.alewife %>% select(1:6) %>% group_by(date, location) %>%
+abundance.combined.alewife <- combined.alewife %>% dplyr::select(1:6) %>% group_by(date, location) %>%
   summarise(combined.alewife.index = mean(cpue))
 
 ## Repeating process for juvenile blueback herring
 juv.blueback <- abundance.allgroups %>% filter(Species_name == "Blueback Herring" &
                                                  spstatus == "1")
-abundance.juv.blueback <- juv.blueback %>% select(1:6) %>% group_by(date, location) %>%
+abundance.juv.blueback <- juv.blueback %>% dplyr::select(1:6) %>% group_by(date, location) %>%
   summarise(juv.blueback.index = mean(cpue))
 
 ## Repeating process for combined blueback herring
 combined.blueback <- abundance.allgroups %>% filter(Species_name == "Blueback Herring" &
                                                       spstatus == "0")
-abundance.combined.blueback <- combined.blueback %>% select(1:6) %>% group_by(date, location) %>%
+abundance.combined.blueback <- combined.blueback %>% dplyr::select(1:6) %>% group_by(date, location) %>%
   summarise(combined.blueback.index = mean(cpue))
 
 ## Repeating process for juvenile American shad
 juv.A.shad <- abundance.allgroups %>% filter(Species_name == "American Shad" &
                                                  spstatus == "1")
-abundance.juv.A.shad <- juv.A.shad %>% select(1:6) %>% group_by(date, location) %>%
+abundance.juv.A.shad <- juv.A.shad %>% dplyr::select(1:6) %>% group_by(date, location) %>%
   summarise(juv.A.shad.index = mean(cpue))
 
 ## Repeating process for combined American shad
 combined.A.shad <- abundance.allgroups %>% filter(Species_name == "American Shad" &
                                                     spstatus == "0")
-abundance.combined.A.shad <- combined.A.shad %>% select(1:6) %>% group_by(date, location) %>%
+abundance.combined.A.shad <- combined.A.shad %>% dplyr::select(1:6) %>% group_by(date, location) %>%
   summarise(combined.A.shad.index = mean(cpue))
 
 ## Creating data frame with one row for each haul (for each control1 code) to join abundance indices
-abundance.df <- first.pulls %>% select(control1, date, year, month, station, location, surtemp,
+abundance.df <- first.pulls %>% dplyr::select(control1, date, year, month, station, location, surtemp,
                                        bottemp, sursal, botsal, surdo, botdo)
 abundance.df <- distinct(abundance.df)
 
@@ -148,6 +148,97 @@ abundance.all.stations$date <- as.Date(paste(abundance.all.stations$year,
                                              abundance.all.stations$month, 1, sep = "-"),
                                        format = "%Y-%m-%d")
 
+## At this point, I have two data frames with abundance indices. One (abundance.df) contains abundance
+## indices for each station by species and species group. The other contains combined abundance indices
+## for each species/species group (a simple average across all stations for that species/species group
+## for each month). For the first data frame, I can bind daily flow data with the indices for each station
+## (possibly with a lag). For the other df, I can bind average monthly flows with the averaged abundance
+## indices.
+
+## Reading in Roanoke Rapids discharge data set
+roanoke.rapids.discharge <- read.csv(file = "./Data/RawData/Roanoke rapids 1912 to June 2020.csv")
+
+## Setting "date" column as date
+roanoke.rapids.discharge$date <- as.Date(roanoke.rapids.discharge$date, format = "%m/%d/%y")
+
+## Correcting 1900s date incorrectly set as 20xx
+roanoke.rapids.discharge$date <- format(roanoke.rapids.discharge$date, "%y%m%d")
+
+create.early.dates <- (function(d) {
+  paste0(ifelse(as.numeric(rownames(roanoke.rapids.discharge)) > 32142,"20","19"),d)
+})
+roanoke.rapids.discharge$date <- create.early.dates(roanoke.rapids.discharge$date)
+
+roanoke.rapids.discharge$date <- as.Date(roanoke.rapids.discharge$date, format = "%Y%m%d")
+
+## Joining disharge data with station-specific abundance indices
+flows.abundance.df <- left_join(abundance.df, roanoke.rapids.discharge, by = "date")
+
+flows.test <- lm(flows.abundance.df$juv.A.shad.index ~ flows.abundance.df$avg.daily.flow)
+summary(flows.test)
+
+## Reading in raw data from USGS gage stations at Jamesville and Oak City
+jamesville.gage <- read.csv(file = "./Data/RawData/jamesville_USGS_waterquality_raw.csv")
+oakcity.gage <- read.csv(file = "./Data/RawData/OakCity_USGS_waterquality_raw.csv")
+
+## Setting data classes
+str(oakcity.gage)
+oakcity.gage$site_no <- as.factor(oakcity.gage$site_no)
+oakcity.gage$Date <- as.Date(oakcity.gage$Date, format = "%Y-%m-%d")
+oakcity.gage$X_00095_00003 <- as.numeric(oakcity.gage$X_00095_00003)
+
+str(jamesville.gage)
+jamesville.gage$site_no <- as.factor(jamesville.gage$site_no)
+jamesville.gage$Date <- as.Date(jamesville.gage$Date, format = "%Y-%m-%d")
+jamesville.gage$X_00095_00003 <- as.numeric(jamesville.gage$X_00095_00003)
+
+## Selecting only columns of interest and renaming
+jamesville.gage <- jamesville.gage[,-c(1,2,3,6,7,8,10,12)]
+jamesville.gage <- jamesville.gage %>% rename(temperature.jamesville = X_00010_00003)
+jamesville.gage <- jamesville.gage %>% rename(specific.cond.jamesville = X_00095_00003)
+jamesville.gage <- jamesville.gage %>% rename(DO.jamesville = X_00300_00003)
+jamesville.gage <- jamesville.gage %>% rename(date = Date)
+
+oakcity.gage <- oakcity.gage[,-c(1,2,3,6,7,8,10,12)]
+oakcity.gage <- oakcity.gage %>% rename(temperature.oakcity = X_00010_00003)
+oakcity.gage <- oakcity.gage %>% rename(specific.cond.oakcity = X_00095_00003)
+oakcity.gage <- oakcity.gage %>% rename(DO.oakcity = X_00300_00003)
+oakcity.gage <- oakcity.gage %>% rename(date = Date)
+
+## Joining Jamesville and Oak City water quality data with set of other predictors
+predictors.df <- left_join(flows.abundance.df, jamesville.gage, by = "date")
+predictors.df <- left_join(predictors.df, oakcity.gage, by = "date")
+
+## Reading in gage station data from Westover, NC (provided by Julie; contains water quality data)
+westover.gage <- read.csv(file = "./Data/RawData/westoverNC.gage.csv")
+
+## Setting data classes
+str(westover.gage)
+westover.gage$date <- as.Date(westover.gage$date, format = "%m/%d/%y")
+
+## Renaming columns to indicate data is from Westover gage
+westover.gage <- westover.gage[,-c(1,2)]
+westover.gage <- westover.gage %>% rename(temp.C.max.top.westover = Temp.C.max.top)
+westover.gage <- westover.gage %>% rename(temp.C.min.top.westover = Temp.C.min.top)
+westover.gage <- westover.gage %>% rename(temp.C.mean.top.westover = Temp.C.mean.top)
+westover.gage <- westover.gage %>% rename(temp.C.max.bottom.westover = Temp.C.max.bottom)
+westover.gage <- westover.gage %>% rename(temp.C.min.bottom.westover = Temp.C.min.bottom)
+westover.gage <- westover.gage %>% rename(temp.C.mean.bottom.westover = Temp.C.mean.bottom)
+
+## Joining Westover water quality data with predictor data set
+predictors.df <- left_join(predictors.df, westover.gage, by = "date")
+
+## Arranging data set by date
+predictors.df <- predictors.df %>% arrange(date)
+
+## Organizing and cleaning data set to be exported to processed data file
+predictors.df <- predictors.df[,-6]
+predictors.df <- predictors.df[,c(2:5,1,6:30)]
+
+write_csv(predictors.df, "./Data/ProcessedData/predictors.df.csv")
+
+### *** For data exploration script
+
 ## Graphing aggregated abundance over time for each species/species group
 ggplot(data = abundance.all.stations, aes(x = date,
                                           y = abundance.all.stations$juv.A.shad.index.ALL)) +
@@ -168,7 +259,6 @@ ggplot(data = abundance.all.stations, aes(x = date,
                                           y = abundance.all.stations$combined.blueback.index.ALL)) +
   geom_line()
 
-### *** For data exploration script
 ## Graphing bottom temperature (degrees Celsius) over time
 ggplot(data = abundance.df, aes(x= date, y = bottemp)) +
   geom_line()
