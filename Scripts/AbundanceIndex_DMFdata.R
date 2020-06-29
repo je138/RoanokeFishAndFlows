@@ -1,4 +1,5 @@
 getwd()
+library(ggplot2)
 library(tidyverse)
 
 ## Importing raw data from NC DMF juvenile alosine survey in Albemarle Sound (see metadata)
@@ -237,6 +238,78 @@ predictors.df <- predictors.df[,c(2:5,1,6:30)]
 
 write_csv(predictors.df, "./Data/ProcessedData/predictors.df.csv")
 
+############### Creating abundance data set with all pulls ######################################
+## Filtering for only alosine species (A. shad, blueback herring, alewife)
+alosines.all.pulls <- raw.data.without9S %>% filter(Species_name != "")
+
+## Grouping by control3 (haul id (1 haul of seine = 1 unit of effort), species, and species status)
+## and creating summary column of average CPUE
+ap.abundance.allgroups <- alosines.all.pulls %>% group_by(control3, date, Species_name, spstatus, location) %>%
+  dplyr::select(control1, control3, month, colnum) %>%
+  summarise(cpue = mean(colnum))
+
+## Filtering for only juvenile alewife (will make separate index for combined group)
+ap.juv.alewife <- ap.abundance.allgroups %>% filter(Species_name == "Alewife" &
+                                                spstatus == "1")
+
+ap.abundance.juv.alewife <- ap.juv.alewife %>% dplyr::select(1:6) %>% group_by(date, location) %>%
+  summarise(juv.alewife.index = mean(cpue))
+
+## Repeating process for combined (juvenile and adult) group
+ap.combined.alewife <- ap.abundance.allgroups %>% filter(Species_name == "Alewife" &
+                                                     spstatus == "0")
+ap.abundance.combined.alewife <- ap.combined.alewife %>% dplyr::select(1:6) %>% group_by(date, location) %>%
+  summarise(combined.alewife.index = mean(cpue))
+
+## Repeating process for juvenile blueback herring
+ap.juv.blueback <- ap.abundance.allgroups %>% filter(Species_name == "Blueback Herring" &
+                                                 spstatus == "1")
+ap.abundance.juv.blueback <- ap.juv.blueback %>% dplyr::select(1:6) %>% group_by(date, location) %>%
+  summarise(juv.blueback.index = mean(cpue))
+
+## Repeating process for combined blueback herring
+ap.combined.blueback <- ap.abundance.allgroups %>% filter(Species_name == "Blueback Herring" &
+                                                      spstatus == "0")
+ap.abundance.combined.blueback <- ap.combined.blueback %>% dplyr::select(1:6) %>% group_by(date, location) %>%
+  summarise(combined.blueback.index = mean(cpue))
+
+## Repeating process for juvenile American shad
+ap.juv.A.shad <- ap.abundance.allgroups %>% filter(Species_name == "American Shad" &
+                                               spstatus == "1")
+ap.abundance.juv.A.shad <- ap.juv.A.shad %>% dplyr::select(1:6) %>% group_by(date, location) %>%
+  summarise(juv.A.shad.index = mean(cpue))
+
+## Repeating process for combined American shad
+ap.combined.A.shad <- ap.abundance.allgroups %>% filter(Species_name == "American Shad" &
+                                                    spstatus == "0")
+ap.abundance.combined.A.shad <- ap.combined.A.shad %>% dplyr::select(1:6) %>% group_by(date, location) %>%
+  summarise(combined.A.shad.index = mean(cpue))
+
+## Creating data frame with one row for each haul (for each control1 code) to join abundance indices
+ap.abundance.df <- raw.data.without9S %>% dplyr::select(control1, date, year, month, station, location, surtemp,
+                                              bottemp, sursal, botsal, surdo, botdo)
+ap.abundance.df <- distinct(ap.abundance.df)
+
+## Joining abundance indices for each species/species status
+ap.abundance.df <- left_join(ap.abundance.df, ap.abundance.combined.A.shad, by = c("date","location"))
+ap.abundance.df <- left_join(ap.abundance.df, ap.abundance.combined.alewife, by = c("date","location"))
+ap.abundance.df <- left_join(ap.abundance.df, ap.abundance.combined.blueback, by = c("date","location"))
+ap.abundance.df <- left_join(ap.abundance.df, ap.abundance.juv.A.shad, by = c("date","location"))
+ap.abundance.df <- left_join(ap.abundance.df, ap.abundance.juv.alewife, by = c("date","location"))
+ap.abundance.df <- left_join(ap.abundance.df, ap.abundance.juv.blueback, by = c("date","location"))
+
+## Replacing "NAs" with 0, under the assumption that for each haul an empty record indicates that
+## none of that species were caught
+ap.abundance.df <- ap.abundance.df %>% replace_na(list(combined.A.shad.index = 0,
+                                                 combined.alewife.index = 0,
+                                                 combined.blueback.index = 0,
+                                                 juv.A.shad.index = 0,
+                                                 juv.alewife.index = 0,
+                                                 juv.blueback.index = 0))
+
+ggplot(data = abundance.df, aes(y = abundance.df$juv.A.shad, x = date)) + geom_line()
+ggplot(data = ap.abundance.df, aes(y = ap.abundance.df$juv.A.shad.index, x = date)) + geom_line()
+
 ### *** For data exploration script
 
 ## Graphing aggregated abundance over time for each species/species group
@@ -266,3 +339,11 @@ ggplot(data = abundance.df, aes(x= date, y = bottemp)) +
 ## Graphing bottom temp data missingness over time
 ggplot(data = subset(abundance.df, is.na(bottemp)), aes(x = date)) +
   geom_histogram()
+
+## Trying out nonmetric MDS
+library(MASS)
+test <- predictors.df[,6:30]
+d <- dist(test)
+fit <- isoMDS(d, )
+
+
