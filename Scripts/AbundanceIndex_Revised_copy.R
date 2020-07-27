@@ -463,6 +463,7 @@ environmental.matrix <- left_join(environmental.matrix, rr.discharge_count.over3
 monthly.abundance_june.thru.nov$month <- factor(monthly.abundance_june.thru.nov$month,
                                                 levels = c("6","7","8","9","10","11"))
 
+write.csv(environmental.matrix, file = "./Data/ProcessedData/environmental.matrix.clean")
 
 
 ## Formatting environmental matrix to match dimensions of abundance matrix; trying 3 month lag

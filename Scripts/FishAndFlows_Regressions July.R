@@ -182,14 +182,14 @@ ggplot(american.shad.panel, aes(x = total.CPUE, y = annual.juv.abundance)) +
 
 
 ## Running regressions on June blueback abundance
-june.bbh.abundance <- monthly.alosine.abundance %>% filter(month == 6) %>%
+july.bbh.abundance <- monthly.alosine.abundance %>% filter(month == 7) %>%
   dplyr::select(c("date", "year", "month", "monthly.blueback.herring.JAI"))
-june.bbh.abundance <- june.bbh.abundance %>% filter(year %in% c(1986:2020))
+july.bbh.abundance <- july.bbh.abundance %>% filter(year %in% c(1986:2020))
 
 lagged.env.matrix <- read.csv("./Data/ProcessedData/environmental.matrix.final.csv")
 lagged.env.matrix$date <- as.Date(lagged.env.matrix$date, format = "%Y-%m-%d")
 
-regression.env.matrix <- semi_join(lagged.env.matrix, june.bbh.abundance, by = "date")
+regression.env.matrix <- semi_join(lagged.env.matrix, july.bbh.abundance, by = "date")
 regression.env.matrix <- regression.env.matrix %>% dplyr::select(-c("X"))
 colnames(regression.env.matrix) = gsub("3monthlag", "march", colnames(regression.env.matrix))
 colnames(regression.env.matrix) = gsub("2monthlag", "april", colnames(regression.env.matrix))
@@ -198,36 +198,34 @@ regression.env.matrix <- regression.env.matrix %>% dplyr::select(-c("minDO.oakci
                                                              "minDO.oakcity.april", "minDO.jamesville.april",
                                                              "minDO.oakcity.may", "minDO.jamesville.may",
                                                              "minDO.oakcity", "minDO.jamesville"))
-bbh.regression.panel <- left_join(june.bbh.abundance, regression.env.matrix, by = "date")
+bbh.regression.panel <- left_join(july.bbh.abundance, regression.env.matrix, by = "date")
 bbh.regression.panel <- bbh.regression.panel %>% dplyr::select(-c("date", "month"))
 
 bbh.model <- lm(data = bbh.regression.panel, formula = monthly.blueback.herring.JAI ~
-                  poly(bbh.regression.panel$days.over.30k, 1, raw = TRUE))
+                  poly(bbh.regression.panel$days.over.30k.march, 1, raw = TRUE))
 summary(bbh.model)
 cor(bbh.regression.panel$inflows.may, bbh.regression.panel$rise.rate.may)
 
 plot(bbh.regression.panel$rise.rate.may, resid(bbh.model))
 
-ggplot(data = bbh.regression.panel, aes(rise.rate.may, monthly.blueback.herring.JAI)) +
+ggplot(data = bbh.regression.panel, aes(days.over.20k.march, monthly.blueback.herring.JAI)) +
   geom_point() +
   stat_smooth(method = lm, formula = y ~ poly(x, 1, raw = TRUE))
 
 ## Some variables that stood out:
-# rise.rate.april (coeff = .022, p = 0.12) - range (10:1165)
-# max.flow.may (coeff = .0007, p = .11) 
-# date of max flow.may (coeff = 0.79, .066)
-# fall.rate.may (coeff = .031, p = .036) **
-# rise.rate.may (coeff = .045, p = .00182) ** - correlated with fall rate in may (r = 0.42) and inflows (r = .51)
-# inflows.may (coeff = .001, p = 0.17)
-# Upper qtl inflows in may (coeff = 13.03, p = 0.145)
-# days.over.20k.may (coeff = 0.74, p = 0.16)
-# monthly.rise.rate (june) (coeff = .0076, r = 0.172)
+# median flow march (.0041, .0009) ***
+# max flow march (0.002266, .053) .
+# date of max flow march (-1.29, 0.185)
+# Inflows march (.002, 0.156)
+# Days over 10k march (2.124, .0333) *
+# Days over 15k march (2.31, .0226) *
+# Days over 20k march (3.24, .00579) **
+# Days over 30k march (7.429, .000015) ***
 
 ## Adding all variables to linear model then performing stepwise selection of variables
 bbh.model.stepwise <- lm(data = bbh.regression.panel, formula = monthly.blueback.herring.JAI ~
-                           rise.rate.april + max.flow.may + date.of.max.flow.may + fall.rate.may +
-                           rise.rate.may + inflows.may + inflows.upperqtl.may + days.over.20k.may +
-                           monthly.rise.rate)
+                           median.flow.march + max.flow.march + date.of.max.flow.march + inflows.march +
+                           days.over.10k.march + days.over.15k.march + days.over.30k.march)
 summary(bbh.model.stepwise)
 stepwise.bbh.model <- stepAIC(bbh.model.stepwise)
 summary(stepwise.bbh.model)
@@ -258,9 +256,12 @@ curve(gp$predict(x), add=T, col=2)
 gam.bbh.model.test <- gam(data = bbh.regression.panel, s(median.flow.april))
 
 
-## Many variables with Gaussian/unimodal distributions --> optimal ranges
+## Removing outlier
+bbh.regression.panel.outlier.removed <- bbh.regression.panel %>% filter(year != 1993)
 
-
-
-
+bbh.model.stepwise.outlier.removed <- lm(data = bbh.regression.panel.outlier.removed, formula = monthly.blueback.herring.JAI ~
+                           median.flow.march + max.flow.march + date.of.max.flow.march + inflows.march +
+                           days.over.10k.march + days.over.15k.march + days.over.30k.march)
+stepwise.bbh.model.outlier.removed <- stepAIC(bbh.model.stepwise.outlier.removed)
+summary(stepwise.bbh.model.outlier.removed)
 

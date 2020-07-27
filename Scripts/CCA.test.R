@@ -37,9 +37,9 @@ library(grid)
 # ## add fitted surface of diversity to the model
 # ordisurf(mod, diversity(dune), add = TRUE)
 
-
 data(varespec, varechem)
 mod <- cca(varespec ~ Al + P + K, varechem)
+summary(mod)
 ## leverage
 hatvalues(mod)
 plot(hatvalues(mod), type = "h")
